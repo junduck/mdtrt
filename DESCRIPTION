@@ -1,0 +1,15 @@
+Package: mdtrt
+Type: Package
+Title: MDTRT: Incremental/Online Market Data Toolbox
+Version: 0.6
+Date: 2020-10-01
+Author: Jun
+Maintainer: Jun <imlijunda@gmail.com>
+Description: This package provides various data structures and online algorithms 
+  suitable for processing market data incrementally.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports: Rcpp (>= 1.0.5)
+LinkingTo: Rcpp, RcppArmadillo, BH
+RoxygenNote: 7.1.1
