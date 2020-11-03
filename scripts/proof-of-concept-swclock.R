@@ -21,13 +21,13 @@ colnames(m) <- c("Open", "High", "Low", "Close", "Tnvr", "Vol", "VWAP", "Time")
 window_size_second <- 15
 # provide enough buffer to store window data, 16 is more than enough since sina provides 3s snapshots
 buffer_size <- 16
-clk <- new(mdtrt:::sliding_window_clock_market, 15, 16)
+clk <- new(mdtrt:::sliding_window_clock_market, n, 15, 16)
 
 while (TRUE) {
 
   dt <- tswbench::sina_realtime_quote(codes)
   # ensure row order is consistent, not necessary when using sina_realtime_quote()
-  data.table::setkeyv(dt, "Code")
+  data.table::setkeyv(dt, "sina_code")
 
   # update_tvol() since dt$Vol is total volume traded, if Vol is snapshot volume, use update() instead
   clk$update_tvol(dt$Time, dt$Price, dt$Vol, m)
@@ -39,5 +39,5 @@ while (TRUE) {
   # stateful online analysis recommended, stay tune for updates in a few days
   # ema <- ewcov$update(m[, "VWAP"])
 
-  sleep(2.0)
+  #sleep(2.0)
 }

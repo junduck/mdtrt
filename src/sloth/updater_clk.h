@@ -95,7 +95,7 @@ namespace sloth
           init = true;
         }
         res.close = p;
-        double tot_tnvr = res.tnvr + v * p;
+        double tot_tnvr = res.tnvr + p * v;
         if (tot_tnvr < bsize)
         {
           bar.nbin = 0;
@@ -141,6 +141,11 @@ namespace sloth
 
       void insert(TT t, double p, double v)
       {
+        insert(t, p, v, p * v);
+      }
+
+      void insert(TT t, double p, double v, double tvr)
+      {
         if (!init)
         {
           res.open = res.high = res.low = p;
@@ -164,7 +169,7 @@ namespace sloth
           res.high = std::max(p, res.high);
           res.low = std::min(p, res.low);
           res.vol += v;
-          res.tnvr += p * v;
+          res.tnvr += tvr;
         }
         else
         {
@@ -184,7 +189,7 @@ namespace sloth
             bar.vol = res.vol;
             bar.vwap = res.tnvr / res.vol;
             res.vol = v;
-            res.tnvr = p * v;
+            res.tnvr = tvr;
           }
           else
           {
@@ -194,7 +199,7 @@ namespace sloth
             bar.low = std::min(p, res.low);
             bar.close = p;
             bar.vol = res.vol + v;
-            bar.vwap = (res.tnvr + p * v) / bar.vol;
+            bar.vwap = (res.tnvr + tvr) / bar.vol;
             res.vol = 0;
             res.tnvr = 0;
           }
@@ -212,13 +217,14 @@ namespace sloth
     {
       TT time;
       double open, high, low, close, tnvr, vol, vwap;
-      boost::circular_buffer<double> pbuf, vbuf, hbuf, lbuf;
+      boost::circular_buffer<double> pbuf, vbuf, dbuf, hbuf, lbuf;
       boost::circular_buffer<TT> tbuf;
 
       swclk_updater(int max_buffer_size)
           : open(0.0), high(0.0), low(0.0), close(0.0), vol(0.0),
             pbuf(max_buffer_size),
             vbuf(max_buffer_size),
+            dbuf(max_buffer_size),
             hbuf(max_buffer_size),
             lbuf(max_buffer_size),
             tbuf(max_buffer_size)
@@ -227,13 +233,19 @@ namespace sloth
 
       void insert(TT t, double p, double v)
       {
+        insert(t, p, v, p * v);
+      }
+
+      void insert(TT t, double p, double v, double tvr)
+      {
         // close, vol : O(1)
         close = p;
         vol += v;
-        tnvr += p * v;
+        tnvr += tvr;
         vwap = tnvr / vol;
         pbuf.push_front(p);
         vbuf.push_front(v);
+        dbuf.push_front(tvr);
         // high, low : O(log N)
         while (!hbuf.empty() && hbuf.back() < p)
           hbuf.pop_back();
@@ -252,12 +264,12 @@ namespace sloth
       {
         // open, vol : O(1)
         double p = pbuf.back();
-        double v = vbuf.back();
+        vol -= vbuf.back();
+        tnvr -= dbuf.back();
         pbuf.pop_back();
         vbuf.pop_back();
+        dbuf.pop_back();
         open = pbuf.back();
-        vol -= v;
-        tnvr -= p * v;
         vwap = tnvr / vol;
         // high, low : O(1)
         if (hbuf.front() == p)
