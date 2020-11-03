@@ -394,7 +394,73 @@ public:
   }
 };
 
-class volatility_hisotry
+class volidx
+{
+private:
+  bool init;
+  double _pvi, _nvi;
+  double lv, lp;
+
+  void _update(double p, double v)
+  {
+    if (init)
+    {
+      if (lv > v)
+      {
+        _pvi += _pvi * ((p - lp) / lp);
+      }
+      else if (lv < v)
+      {
+        _nvi += _nvi * ((p - lp) / lp);
+      }
+    }
+    else
+    {
+      init = true;
+    }
+    lp = p;
+    lv = v;
+  }
+
+public:
+  volidx(int period, double initialise = 1000.0)
+      : init(false),
+        _pvi(initialise),
+        _nvi(initialise),
+        lv(0.0),
+        lp(0.0)
+  {
+  }
+
+  List run(NumericVector p, NumericVector v)
+  {
+    R_xlen_t npt = p.length();
+    NumericVector pvi(npt);
+    NumericVector nvi(npt);
+    for (R_xlen_t i = 0; i < npt; ++i)
+    {
+      _update(p[i], v[i]);
+      pvi[i] = _pvi;
+      nvi[i] = _nvi;
+    }
+    return List::create(
+        Named("pvi") = pvi,
+        Named("nvi") = nvi);
+  }
+
+  void run_inplace(NumericVector p, NumericVector v, NumericVector pvi, NumericVector nvi)
+  {
+    R_xlen_t npt = p.length();
+    for (R_xlen_t i = 0; i < npt; ++i)
+    {
+      _update(p[i], v[i]);
+      pvi[i] = _pvi;
+      nvi[i] = _nvi;
+    }
+  }
+};
+
+class volatility_ann
 {
 private:
   size_t n;
@@ -418,7 +484,7 @@ private:
   }
 
 public:
-  volatility_hisotry(int period, int annualise = 250)
+  volatility_ann(int period, int annualise = 250)
       : n(period),
         ann(std::sqrt(annualise)),
         xbuf(n),
@@ -789,72 +855,6 @@ public:
   }
 };
 
-class volidx
-{
-private:
-  bool init;
-  double _pvi, _nvi;
-  double lv, lp;
-
-  void _update(double p, double v)
-  {
-    if (init)
-    {
-      if (lv > v)
-      {
-        _pvi += _pvi * ((p - lp) / lp);
-      }
-      else if (lv < v)
-      {
-        _nvi += _nvi * ((p - lp) / lp);
-      }
-    }
-    else
-    {
-      init = true;
-    }
-    lp = p;
-    lv = v;
-  }
-
-public:
-  volidx(int period, double initialise = 1000.0)
-      : init(false),
-        _pvi(initialise),
-        _nvi(initialise),
-        lv(0.0),
-        lp(0.0)
-  {
-  }
-
-  List run(NumericVector p, NumericVector v)
-  {
-    R_xlen_t npt = p.length();
-    NumericVector pvi(npt);
-    NumericVector nvi(npt);
-    for (R_xlen_t i = 0; i < npt; ++i)
-    {
-      _update(p[i], v[i]);
-      pvi[i] = _pvi;
-      nvi[i] = _nvi;
-    }
-    return List::create(
-        Named("pvi") = pvi,
-        Named("nvi") = nvi);
-  }
-
-  void run_inplace(NumericVector p, NumericVector v, NumericVector pvi, NumericVector nvi)
-  {
-    R_xlen_t npt = p.length();
-    for (R_xlen_t i = 0; i < npt; ++i)
-    {
-      _update(p[i], v[i]);
-      pvi[i] = _pvi;
-      nvi[i] = _nvi;
-    }
-  }
-};
-
 // PSAR: one pass algo!
 
 class obv
@@ -1056,7 +1056,60 @@ public:
   }
 };
 
-// mean absolute error
+// O(N)
+class mae
+{
+private:
+  boost::circular_buffer<double> xbuf;
+  sloth::updater::sma_updater<false> sma;
+
+  double _update(double x)
+  {
+    if (xbuf.full())
+    {
+      sma.roll(x, xbuf.back());
+    }
+    else
+    {
+      sma.insert(x);
+    }
+    xbuf.push_front();
+    double m = sma.m;
+    double e = 0.0;
+    for (auto xx : xbuf)
+    {
+      e += std::abs(xx - m);
+    }
+    e /= xbuf.size();
+    return e;
+  }
+
+public:
+  mae(int period)
+      : xbuf(period),
+        sma()
+  {
+  }
+
+  NumericVector run(NumericVector x)
+  {
+    R_xlen_t npt = x.length();
+    NumericVector val(npt);
+    for (R_xlen_t i = 0; i < npt; ++i)
+    {
+      val[i] = _update(x[i]);
+    }
+    return val;
+  }
+
+  void run_inplace(NumericVector x)
+  {
+    for (R_xlen_t i = 0; i < x.length(); ++i)
+    {
+      x[i] = _update(x[i]);
+    }
+  }
+};
 
 class mass
 {
@@ -1828,4 +1881,185 @@ public:
   }
 };
 
-// ADX? 
+// ADX?
+
+RCPP_MODULE(basic_indic)
+{
+  using namespace Rcpp;
+
+  class_<aroonosc>("aroonosc")
+      .constructor<int>()
+      .method("run", &aroonosc::run, "Run indicator")
+      .method("run_inplace", &aroonosc::run_inplace, "Run indicator, inplace update");
+
+  class_<atr>("atr")
+      .constructor<int>()
+      .method("run", &atr::run, "Run indicator")
+      .method("run_inplace", &atr::run_inplace, "Run indicator, inplace update");
+
+  class_<bband>("bband")
+      .constructor<int, double>()
+      .method("run", &bband::run, "Run indicator")
+      .method("run_inplace", &bband::run_inplace, "Run indicator, inplace update");
+
+  class_<cmi>("cmi")
+      .constructor<int>()
+      .method("run", &cmi::run, "Run indicator")
+      .method("run_inplace", &cmi::run_inplace, "Run indicator, inplace update");
+
+  class_<cmo>("cmo")
+      .constructor<int>()
+      .method("run", &cmo::run, "Run indicator")
+      .method("run_inplace", &cmo::run_inplace, "Run indicator, inplace update");
+
+  class_<dema>("dema")
+      .constructor<int>()
+      .method("run", &dema::run, "Run indicator")
+      .method("run_inplace", &dema::run_inplace, "Run indicator, inplace update");
+
+  class_<dpo>("dpo")
+      .constructor<int>()
+      .method("run", &dpo::run, "Run indicator")
+      .method("run_inplace", &dpo::run_inplace, "Run indicator, inplace update");
+
+  class_<ebband>("ebband")
+      .constructor<int, double>()
+      .method("run", &ebband::run, "Run indicator")
+      .method("run_inplace", &ebband::run_inplace, "Run indicator, inplace update");
+  
+  class_<ema>("ema")
+      .constructor<int>()
+      .method("run", &ema::run, "Run indicator")
+      .method("run_inplace", &ema::run_inplace, "Run indicator, inplace update");
+  
+  class_<emosc>("emosc")
+      .constructor<int, int>()
+      .method("run", &emosc::run, "Run indicator")
+      .method("run_inplace", &emosc::run_inplace, "Run indicator, inplace update");
+  
+  class_<hma>("hma")
+      .constructor<int>()
+      .method("run", &hma::run, "Run indicator")
+      .method("run_inplace", &hma::run_inplace, "Run indicator, inplace update");
+  
+  class_<kama>("kama")
+      .constructor<int, int, int>()
+      .method("run", &kama::run, "Run indicator")
+      .method("run_inplace", &kama::run_inplace, "Run indicator, inplace update");
+  
+  class_<macd>("macd")
+      .constructor<int, int, int>()
+      .method("run", &macd::run, "Run indicator")
+      .method("run_inplace", &macd::run_inplace, "Run indicator, inplace update");
+  
+  class_<mae>("mae")
+      .constructor<int>()
+      .method("run", &mae::run, "Run indicator")
+      .method("run_inplace", &mae::run_inplace, "Run indicator, inplace update");
+  
+  class_<mass>("mass")
+      .constructor<int>()
+      .method("run", &mass::run, "Run indicator")
+      .method("run_inplace", &mass::run_inplace, "Run indicator, inplace update");
+  
+  class_<mfi>("mfi")
+      .constructor<int>()
+      .method("run", &mfi::run, "Run indicator")
+      .method("run_inplace", &mfi::run_inplace, "Run indicator, inplace update");
+  
+  class_<minmax>("minmax")
+      .constructor<int>()
+      .method("run", &minmax::run, "Run indicator")
+      .method("run_inplace", &minmax::run_inplace, "Run indicator, inplace update");
+  
+  class_<obv>("obv")
+      .constructor()
+      .method("run", &obv::run, "Run indicator")
+      .method("run_inplace", &obv::run_inplace, "Run indicator, inplace update");
+  
+  class_<ppo>("ppo")
+      .constructor<int, int>()
+      .method("run", &ppo::run, "Run indicator")
+      .method("run_inplace", &ppo::run_inplace, "Run indicator, inplace update");
+  
+  class_<rollsum>("rollsum")
+      .constructor<int>()
+      .method("run", &rollsum::run, "Run indicator")
+      .method("run_inplace", &rollsum::run_inplace, "Run indicator, inplace update");
+  
+  class_<rsi>("rsi")
+      .constructor<int>()
+      .method("run", &rsi::run, "Run indicator")
+      .method("run_inplace", &rsi::run_inplace, "Run indicator, inplace update");
+  
+  class_<sma>("sma")
+      .constructor<int>()
+      .method("run", &sma::run, "Run indicator")
+      .method("run_inplace", &sma::run_inplace, "Run indicator, inplace update");
+  
+  class_<smosc>("smosc")
+      .constructor<int, int>()
+      .method("run", &smosc::run, "Run indicator")
+      .method("run_inplace", &smosc::run_inplace, "Run indicator, inplace update");
+  
+  class_<tema>("tema")
+      .constructor<int>()
+      .method("run", &tema::run, "Run indicator")
+      .method("run_inplace", &tema::run_inplace, "Run indicator, inplace update");
+  
+  class_<variance>("variance")
+      .constructor<int>()
+      .method("run", &variance::run, "Run indicator")
+      .method("run_inplace", &variance::run_inplace, "Run indicator, inplace update");
+  
+  class_<vhf>("vhf")
+      .constructor<int>()
+      .method("run", &vhf::run, "Run indicator")
+      .method("run_inplace", &vhf::run_inplace, "Run indicator, inplace update");
+  
+  class_<vidya>("vidya")
+      .constructor<int, int>()
+      .method("run", &vidya::run, "Run indicator")
+      .method("run_inplace", &vidya::run_inplace, "Run indicator, inplace update");
+  
+  class_<volidx>("volidx")
+      .constructor<int, double>()
+      .method("run", &volidx::run, "Run indicator")
+      .method("run_inplace", &volidx::run_inplace, "Run indicator, inplace update");
+
+  class_<volatility_ann>("volatility_ann")
+      .constructor<int, int>()
+      .method("run", &volatility_ann::run, "Run indicator")
+      .method("run_inplace", &volatility_ann::run_inplace, "Run indicator, inplace update");
+
+  class_<vwma>("vwma")
+      .constructor<int>()
+      .method("run", &vwma::run, "Run indicator")
+      .method("run_inplace", &vwma::run_inplace, "Run indicator, inplace update");
+  
+  class_<wad>("wad")
+      .constructor()
+      .method("run", &wad::run, "Run indicator")
+      .method("run_inplace", &wad::run_inplace, "Run indicator, inplace update");
+  
+  class_<wilders>("wilders")
+      .constructor<int>()
+      .method("run", &wilders::run, "Run indicator")
+      .method("run_inplace", &wilders::run_inplace, "Run indicator, inplace update");
+  
+  class_<willr>("willr")
+      .constructor<int>()
+      .method("run", &willr::run, "Run indicator")
+      .method("run_inplace", &willr::run_inplace, "Run indicator, inplace update");
+  
+  class_<wma>("wma")
+      .constructor<int>()
+      .method("run", &wma::run, "Run indicator")
+      .method("run_inplace", &wma::run_inplace, "Run indicator, inplace update");
+  
+  class_<zlema>("zlema")
+      .constructor<int>()
+      .method("run", &zlema::run, "Run indicator")
+      .method("run_inplace", &zlema::run_inplace, "Run indicator, inplace update");
+
+}

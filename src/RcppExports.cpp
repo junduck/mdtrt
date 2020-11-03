@@ -8,10 +8,12 @@ using namespace Rcpp;
 
 
 RcppExport SEXP _rcpp_module_boot_basic_clock();
+RcppExport SEXP _rcpp_module_boot_basic_indic();
 RcppExport SEXP _rcpp_module_boot_basic_stats();
 
 static const R_CallMethodDef CallEntries[] = {
     {"_rcpp_module_boot_basic_clock", (DL_FUNC) &_rcpp_module_boot_basic_clock, 0},
+    {"_rcpp_module_boot_basic_indic", (DL_FUNC) &_rcpp_module_boot_basic_indic, 0},
     {"_rcpp_module_boot_basic_stats", (DL_FUNC) &_rcpp_module_boot_basic_stats, 0},
     {NULL, NULL, 0}
 };
