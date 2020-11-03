@@ -6,6 +6,65 @@ namespace sloth
 {
   namespace updater
   {
+
+    template <bool kahan>
+    struct msum_updater
+    {
+    };
+
+    template <>
+    struct msum_updater<false>
+    {
+      double s;
+
+      msum_updater()
+          : s(0.0)
+      {
+      }
+
+      void insert(double x)
+      {
+        s += x;
+      }
+
+      void remove(double x)
+      {
+        s -= x;
+      }
+
+      void roll(double x, double y)
+      {
+        s += (x - y);
+      }
+    };
+
+    template <>
+    struct msum_updater<true>
+    {
+      double s, sc;
+
+      msum_updater()
+          : s(0.0),
+            sc(0.0)
+      {
+      }
+
+      void insert(double x)
+      {
+        csum(s, x, sc);
+      }
+
+      void remove(double x)
+      {
+        csum(s, -x, sc);
+      }
+
+      void roll(double x, double y)
+      {
+        csum(s, x - y, sc);
+      }
+    };
+
     template <bool kahan>
     struct sma_updater
     {
@@ -248,11 +307,6 @@ namespace sloth
       {
       }
 
-      explicit ema_updater(int period)
-          : ema_updater(2.0 / (period + 1))
-      {
-      }
-
       void insert(double x)
       {
         if (init)
@@ -278,11 +332,6 @@ namespace sloth
             a(alpha),
             m(0.0),
             mc(0.0)
-      {
-      }
-
-      explicit ema_updater(int period)
-          : ema_updater(2.0 / (period + 1))
       {
       }
 
@@ -319,11 +368,6 @@ namespace sloth
         m.fill(0.0);
       }
 
-      explicit xema_updater(int period)
-          : xema_updater(2.0 / (period + 1))
-      {
-      }
-
       void insert(double x)
       {
         if (init)
@@ -355,11 +399,6 @@ namespace sloth
       {
         m.fill(0.0);
         mc.fill(0.0);
-      }
-
-      explicit xema_updater(int period)
-          : xema_updater(2.0 / (period + 1))
-      {
       }
 
       void insert(double x)

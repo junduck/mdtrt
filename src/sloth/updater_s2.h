@@ -83,12 +83,10 @@ namespace sloth
     template <>
     struct s2weighted_updater<false>
     {
-      size_t n;
       double wsum, w2sum, m, s2;
 
       s2weighted_updater()
-          : n(0),
-            wsum(0.0),
+          : wsum(0.0),
             w2sum(0.0),
             m(0.0),
             s2(0.0)
@@ -248,7 +246,7 @@ namespace sloth
     struct cov_updater
     {
       size_t n;
-      arma::rowvec d, m;
+      arma::colvec d, m;
       arma::mat s2;
 
       explicit cov_updater(int nvar)
@@ -259,20 +257,20 @@ namespace sloth
       {
       }
 
-      void insert(const arma::rowvec &x)
+      void insert(const arma::colvec &x)
       {
         d = x - m;
         n += 1;
         m += d / n;
-        s2 += (x - m).t() * d;
+        s2 += (x - m) * d.t();
       }
 
-      void remove(const arma::rowvec &x)
+      void remove(const arma::colvec &x)
       {
         d = x - m;
         n -= 1;
         m -= d / n;
-        s2 -= (x - m).t() * d;
+        s2 -= (x - m) * d.t();
       }
     };
 
@@ -280,7 +278,7 @@ namespace sloth
     {
       bool init;
       double a, b;
-      arma::rowvec m;
+      arma::colvec m;
       arma::mat s2;
 
       ewcov_updater(int nvar, double alpha)
@@ -297,14 +295,14 @@ namespace sloth
       {
       }
 
-      void insert(const arma::rowvec &x)
+      void insert(const arma::colvec &x)
       {
         if (init)
         {
-          arma::rowvec d{x - m};
-          arma::rowvec i{a * d};
+          arma::colvec d{x - m};
+          arma::colvec i{a * d};
           m += i;
-          s2 += i.t() * d;
+          s2 += i * d.t();
           s2 *= b;
         }
         else
@@ -314,7 +312,7 @@ namespace sloth
         }
       }
 
-      void remove(const arma::rowvec &x)
+      void remove(const arma::colvec &x)
       {
       }
     };

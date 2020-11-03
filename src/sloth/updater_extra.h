@@ -304,17 +304,17 @@ namespace sloth
       arma::mat c;
       arma::colvec d;
 
-      kmeans_updater(int ncluster, int nvar, double halflife)
+      kmeans_updater(int ncluster, int ndim, double halflife)
           : k(ncluster),
             n(0),
             hl(halflife),
-            c(k, nvar, arma::fill::zeros),
+            c(k, ndim, arma::fill::zeros),
             d(k, arma::fill::zeros)
       {
       }
 
-      kmeans_updater(int ncluster, int nvar, int halflife_period)
-          : kmeans_updater(ncluster, nvar, 2.0 / (halflife_period + 1))
+      kmeans_updater(int ncluster, int ndim, int halflife_period)
+          : kmeans_updater(ncluster, ndim, 2.0 / (halflife_period + 1))
       {
       }
 
